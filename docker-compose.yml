@@ -5,44 +5,70 @@ services:
     hostname: api1
     environment:
       DATABASE_URL: "postgres://postgres:postgres@localhost:5432/postgres"
+      ENABLE_SONIC_JSON: 1
+      CPU_PROFILE: /app/prof/cpu-2.prof
+      MEM_PROFILE: /app/prof/mem-2.prof
+      CACHE_HOST: localhost
+      CACHE_PORT: 6379
+      SERVER_PORT: 8080
+      ENABLE_PROFILING: 0
+      ENABLE_PREFORK: 0
+      HTTP_PORT: 8080
     depends_on:
       - postgres
-    expose:
-      - "8080"
     deploy:
       resources:
         limits:
-          cpus: '0.4'
-          memory: '0.4GB'
+          cpus: "0.2"
+          memory: "0.5GB"
     network_mode: host
 
   api2: # API - Instância 01
     <<: *app
     hostname: app2
+    environment:
+      DATABASE_URL: "postgres://postgres:postgres@localhost:5432/postgres"
+      ENABLE_SONIC_JSON: 1
+      CPU_PROFILE: /app/prof/cpu-2.prof
+      MEM_PROFILE: /app/prof/mem-2.prof
+      CACHE_HOST: localhost
+      CACHE_PORT: 6379
+      SERVER_PORT: 8080
+      ENABLE_PROFILING: 0
+      ENABLE_PREFORK: 0
+      HTTP_PORT: 8081
 
   postgres:
     image: postgres
-    command: postgres -c 'max_connections=500' -c 'log_error_verbosity=terse'
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
       - 5432:5432
+    network_mode: host
+    volumes:
+      - ./postgres/:/docker-entrypoint-initdb.d/
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 10s
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 15s
+      timeout: 25s
+    command:
+      [
+        "postgres",
+        "-c",
+        "config_file=/docker-entrypoint-initdb.d/postgresql.conf",
+      ]
+
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: '1.7GB'
+          cpus: "0.7"
+          memory: "1GB"
 
   nginx: # Load Balancer
     image: nginx:latest
+    network_mode: host
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -53,5 +79,20 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.2'
-          memory: '0.5GB'
+          cpus: "0.25"
+          memory: "0.5GB"
+
+  cache:
+    image: redis:latest
+    hostname: cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis/:/etc/redis/
+    command: ["redis-server", "/etc/redis/redis.conf"]
+    network_mode: host
+    deploy:
+      resources:
+        limits:
+          cpus: "0.15"
+          memory: "0.5GB"
